@@ -134,36 +134,3 @@
 /* A view with a font override: components set font classes explicitly, make them follow the view. */
 [data-font] * { font-family: inherit !important; }
 
-/* Sibilla's sphere, the product's mark. Its colors turn slowly, blurred into each other; nothing else on the start screen moves. */
-@property --orb-angle { syntax: "<angle>"; inherits: true; initial-value: 0deg; }
-@keyframes orb-turn { to { --orb-angle: 360deg; } }
-.sibilla-orb {
-  --orb-amber: oklch(0.86 0.19 92);
-  --orb-honey: oklch(0.68 0.18 58);
-  --orb-ink: oklch(0.22 0.05 58);
-  --orb-lagoon: oklch(0.72 0.12 210);
-  position: relative;
-  isolation: isolate;
-  overflow: hidden;
-  container-type: size;
-  border-radius: 9999px;
-  background: var(--orb-ink);
-  animation: orb-turn 18s linear infinite;
-}
-/* Two blurred sweeps turning at different speeds, so the surface looks liquid rather than like a wheel. */
-.sibilla-orb::before, .sibilla-orb::after { content: ""; position: absolute; border-radius: inherit; }
-.sibilla-orb::before {
-  inset: -30%;
-  z-index: -1;
-  background:
-    conic-gradient(from calc(var(--orb-angle) * -2 + 40deg) at 62% 58%, transparent 0 20%, var(--orb-lagoon) 34%, transparent 50%, oklch(0.97 0.06 100) 66%, transparent 80%),
-    conic-gradient(from var(--orb-angle) at 42% 46%, var(--orb-amber), var(--orb-honey) 22%, var(--orb-ink) 44%, var(--orb-honey) 62%, var(--orb-ink) 80%, var(--orb-amber));
-  filter: blur(9cqw);
-}
-/* Glass: a soft highlight top-left, darkening toward the rim. */
-.sibilla-orb::after {
-  inset: 0;
-  background: radial-gradient(circle at 30% 24%, oklch(1 0 0 / 0.55), transparent 26%);
-  box-shadow: inset 0 0 14cqw 2cqw oklch(0.22 0.05 58 / 0.6);
-}
-@media (prefers-reduced-motion: reduce) { .sibilla-orb { animation: none; } }
