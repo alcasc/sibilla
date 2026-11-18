@@ -8,6 +8,7 @@ import { stream } from "hono/streaming";
 import { z } from "zod";
 import { isRoute, AppScopeSchema, DEFAULT_LLM, EFFORT_IDS, MODEL_IDS, PROVIDER_IDS, QuerySchema, ScalarSchema, SpecSchema, collectionProblems, withCollections, type AppScope } from "@sibilla/shared";
 import { introspect } from "./schema";
+import { addDemo } from "./demo";
 import { ColumnDefSchema, RowsSchema, TableDefSchema, addColumn, createTable, dropTable, insertRows } from "./tables";
 import { QueryError, runQuery } from "./query";
 import { RecordError, clearDocs, createRecord, deleteRecord, importDocs, seedDocs, updateRecord } from "./records";
@@ -151,7 +152,10 @@ export function createApp({ db, step, libraries, keys = new KeyStore(db), verify
   app.post("/auth/register", async (c) => {
     if (!auth || !canSignUp()) throw new BadRequest("La registrazione è chiusa");
     const { email, password } = await body(c, Credentials);
-    return c.json({ user: startSession(c, register(db, email, password)) }, 201);
+    const user = register(db, email, password);
+    // Every new account starts with the demo conversation. An account is worth more than its demo: a failure here is only logged.
+    try { addDemo(db, schema, user.id); } catch (e) { console.warn(`Conversazione demo non creata: ${(e as Error).message}`); }
+    return c.json({ user: startSession(c, user) }, 201);
   });
   app.post("/auth/login", async (c) => {
     const { email, password } = await body(c, Credentials.extend({ password: z.string() }));

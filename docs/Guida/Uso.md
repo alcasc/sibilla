@@ -8,6 +8,7 @@ tags: [guida]
 
 Dalla schermata iniziale scrivi cosa ti serve: «una dashboard degli ordini con l'andamento mensile», «un'app per tracciare le spese del team». Puoi dettare, allegare immagini, PDF o testi, incollare uno screenshot da riprodurre. Sotto la casella ci sono alcuni **suggerimenti** pronti, costruiti sulle tue tabelle: un clic e partono.
 
+- Un account nuovo parte con una **conversazione demo**, «Vault Markdown»: un'app fatta davvero con Sibilla, con la chat che l'ha costruita e i suoi dati di esempio. È una copia tua: puoi usarla, modificarla o eliminarla.
 - La conversazione **si salva da sola** al primo messaggio e compare nella barra laterale.
 - Ogni interfaccia generata è una **nuova versione**: dal menu delle versioni torni a una precedente e la ripristini.
 - Se fai solo una **domanda sui dati** («quanti clienti abbiamo a Milano?») Sibilla risponde a parole, senza toccare l'interfaccia.

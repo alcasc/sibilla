@@ -29,6 +29,7 @@ tags: [sviluppo]
 | `schema.ts`, `db.ts`, `seed.ts` | Lettura dello schema; apertura del database; dati dimostrativi |
 | `interfaces.ts` | Conversazioni, versioni, messaggi, link pubblici |
 | `auth.ts`, `keys.ts` | Account e sessioni; chiavi API cifrate |
+| `demo.ts`, `../demo/` | La conversazione demo che ogni nuovo account riceve: un file esportato da una conversazione vera (interfaccia, chat, documenti), copiato con un `appId` nuovo |
 | `bundle.ts`, `libraries.ts`, `custom.ts` | Compilazione delle viste libere e gestione delle librerie npm |
 
 ## web/src/

@@ -23,6 +23,7 @@ Cosa non c'è, cosa è fragile e cosa non è mai stato verificato. Tenere questa
 - Una colonna non si può rinominare né eliminare; un tipo non si può cambiare.
 - Esportazioni e schermate dei dati si fermano a 1000 righe; la schermata Database mostra le 200 più recenti.
 - Nessun recupero della password, nessun ruolo, nessun limite ai tentativi di accesso.
+- La conversazione demo arriva solo agli account creati da qui in poi, e solo con gli account attivi: non c'è con `SIBILLA_AUTH=off`. Porta l'ultima versione dell'app, non la sua cronologia. Le sue viste libere scaricano le librerie npm al primo uso, quindi serve la rete.
 
 ## Generazione
 

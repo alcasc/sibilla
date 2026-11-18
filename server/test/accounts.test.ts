@@ -48,12 +48,12 @@ test("with accounts on: sign-up, login, and conversations private to their owner
   expect((await ada("GET", "/auth/me")).body).toEqual({ enabled: true, user: null, signup: true });
   expect((await ada("POST", "/auth/register", { email: "ada@example.com", password: "corta" })).status).toBe(400);
   expect((await ada("POST", "/auth/register", { email: "Ada@Example.com", password: "password-lunga" })).status).toBe(201);
-  // The first account takes over what existed before.
-  expect((await ada("GET", "/interfaces")).body.map((i: { nome: string }) => i.nome)).toEqual(["Di prima degli account"]);
+  // The first account takes over what existed before, and like every account starts with the demo conversation.
+  expect((await ada("GET", "/interfaces")).body.map((i: { nome: string }) => i.nome).sort()).toEqual(["Di prima degli account", "Vault Markdown"]);
 
   await bob("POST", "/auth/register", { email: "bob@example.com", password: "password-lunga" });
   const mine = (await bob("POST", "/interfaces", { nome: "Di Bob", spec: null, prompt: null })).body;
-  expect((await bob("GET", "/interfaces")).body.map((i: { nome: string }) => i.nome)).toEqual(["Di Bob"]);
+  expect((await bob("GET", "/interfaces")).body.map((i: { nome: string }) => i.nome).sort()).toEqual(["Di Bob", "Vault Markdown"]);
   expect((await ada("GET", `/interfaces/${mine.id}`)).status).toBe(404);
   expect((await ada("DELETE", `/interfaces/${mine.id}`)).status).toBe(404);
 
@@ -140,4 +140,34 @@ test("mini app data: import validates, deleting a document empties the fields th
   createInterface(db, { nome: "Note", spec: appSpec, prompt: null });
   db.prepare("update sib_docs set created_at = '2020-01-01T00:00:00.000Z'").run();
   expect(deleteOrphanDocs(db)).toBe(0); // now a conversation holds the app
+});
+
+test("every new account gets its own copy of the demo conversation, with its own data", async () => {
+  const db = openDb(":memory:");
+  const app = createApp({ db, step, libraries, auth: true, signup: true });
+  const demoOf = async (email: string) => {
+    const user = browser(app);
+    await user("POST", "/auth/register", { email, password: "password-lunga" });
+    const [demo] = (await user("GET", "/interfaces")).body as { id: number; nome: string }[];
+    expect(demo.nome).toBe("Vault Markdown");
+    const messages = (await user("GET", `/interfaces/${demo.id}/messages`)).body as { role: string; content: string }[];
+    expect(messages[0]).toMatchObject({ role: "user", content: expect.stringContaining("vaults di MD") });
+    const { spec } = (await user("GET", `/interfaces/${demo.id}/versions/1`)).body as { spec: { appId: string; screens: { path: string }[] } };
+    expect(spec.screens.map((s) => s.path)).toContain("/note/:id");
+    return spec.appId;
+  };
+  const [first, second] = [await demoOf("ada@example.com"), await demoOf("bob@example.com")];
+  expect(first).not.toBe(second);
+
+  for (const appId of [first, second]) {
+    const docs = db.prepare("select id, collection, data from sib_docs where app_id = ? order by id").all(appId) as { id: number; collection: string; data: string }[];
+    expect(docs.filter((d) => d.collection === "note")).toHaveLength(9);
+    // Notes point at the vaults of their own copy, not at someone else's.
+    const vaults = new Set(docs.filter((d) => d.collection === "vault").map((d) => d.id));
+    expect(vaults.size).toBe(3);
+    for (const d of docs.filter((x) => x.collection === "note")) expect(vaults.has(JSON.parse(d.data).vault_id)).toBe(true);
+  }
+  // Nothing of the account it was exported from travels with the demo.
+  const all = JSON.stringify(db.prepare("select * from sib_versions").all()) + JSON.stringify(db.prepare("select * from sib_messages").all()) + JSON.stringify(db.prepare("select data from sib_docs").all());
+  expect(all).not.toMatch(/[\w.+-]+@[\w-]+\.\w+|[A-Z]:\\\\Users|\/Users\//);
 });
