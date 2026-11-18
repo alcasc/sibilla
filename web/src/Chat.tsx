@@ -26,7 +26,7 @@ function statusState(text: string | undefined): AiStatusState {
   if (!text) return "thinking";
   if (/^(Esploro|Leggo)/.test(text)) return "researching";
   if (/^Verifico/.test(text)) return "analyzing";
-  if (/^(Costruisco|Creo|Inserisco|Preparo)/.test(text)) return "writing";
+  if (/^(Costruisco|Modifico|Creo|Inserisco|Preparo)/.test(text)) return "writing";
   return "thinking";
 }
 

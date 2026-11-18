@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import type Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
 import {
-  DEFAULT_LLM, QuerySchema, ScalarSchema, SpecSchema, collectionProblems, modelInfo, nodeQueries, outputName, routeParams, specJsonSchema, validateSpecTree, withCollections,
+  DEFAULT_LLM, PatchSchema, QuerySchema, ScalarSchema, SpecSchema, applyPatch, collectionProblems, patchJsonSchema, modelInfo, nodeQueries, outputName, routeParams, specJsonSchema, validateSpecTree, withCollections,
   usageCost, type AppScope, type DbSchema, type GenerateProgress, type GenerateUsage, type LlmOptions, type Query, type Scalar, type Spec,
 } from "@sibilla/shared";
 import { checkQuery } from "./query";
@@ -105,6 +105,20 @@ export const TOOLS = [
         } },
       },
       required: ["messaggio", "spec"],
+    },
+  },
+  {
+    name: "modifica_interfaccia",
+    description: "Modifica l'interfaccia corrente scrivendo solo ciò che cambia: molto più veloce di mostra_interfaccia quando la richiesta tocca una parte della vista. 'nodi': ogni nodo sostituisce quello con lo stesso id (scrivilo per intero), oppure, se l'id è nuovo, viene aggiunto in fondo ai figli del suo parentId. 'rimuovi': id dei nodi da togliere, con tutto ciò che contengono. 'sposta': mette il nodo 'id' subito dopo il fratello 'dopo' (null = primo tra i fratelli); usalo anche per posizionare un nodo appena aggiunto. 'titolo' cambia il titolo; 'stile' cambia solo le chiavi indicate; 'variabili' e 'collections' aggiungono o sostituiscono per nome. Tutto il resto resta com'è. Il risultato viene verificato come una spec intera: se non è valido ricevi i problemi e nulla viene applicato.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        messaggio: { type: "string" }, ...(patchJsonSchema(specJsonSchema()).properties as Record<string, unknown>),
+        dati_iniziali: { type: "array", items: {
+          type: "object", properties: { collezione: { type: "string" }, documenti: { type: "array", items: { type: "object" } } }, required: ["collezione", "documenti"],
+        } },
+      },
+      required: ["messaggio"],
     },
   },
 ];
@@ -244,7 +258,9 @@ Hai due modi per costruire, combinabili nella stessa vista:
 - limit: null usa il default (200), massimo 1000.
 
 # Modifiche
-Se ricevi la spec corrente, parti da quella e cambia solo ciò che l'utente chiede, mantenendo gli id dei nodi invariati e riportando invariate le sue collections (aggiungi pure campi o collezioni nuove).
+Se ricevi la spec corrente, parti da quella e cambia solo ciò che l'utente chiede.
+- Se la richiesta tocca una parte della vista (un titolo, una colonna, un filtro o un grafico in più, un nodo da togliere o spostare, lo stile, un campo in più) usa modifica_interfaccia e scrivi solo ciò che cambia: l'utente vede il risultato molto prima.
+- Usa mostra_interfaccia quando la vista va rifatta da capo o cambia quasi tutta: in quel caso mantieni gli id dei nodi che restano e riporta invariate le collections (aggiungi pure campi o collezioni nuove).
 
 # Schema del database
 ${tables}`;
@@ -342,6 +358,8 @@ function requestText(input: GenerateInput): string {
 type Row = Record<string, Scalar>;
 type Deps = {
   schema: DbSchema; step: LlmStep; libraries: LibraryStore;
+  /** Waits before a new attempt at a model call that failed for a passing reason; replaceable in tests. */
+  wait?: (ms: number, signal?: AbortSignal) => Promise<void>;
   /** Runs an exploration query, seeing the collections of the app being edited. */
   query: (q: Query, app: AppScope) => Row[];
   seed?: (app: AppScope, items: SeedItem[]) => void;
@@ -349,11 +367,26 @@ type Deps = {
   tables?: { create: (def: unknown) => DbSchema; insert: (table: string, rows: unknown) => number };
 };
 
-const ShowInput = z.object({
-  messaggio: z.string(), spec: z.unknown(),
-  dati_iniziali: z.array(z.object({ collezione: z.string(), documenti: z.array(z.record(z.string(), ScalarSchema)) })).optional(),
-});
+const SeedInput = z.array(z.object({ collezione: z.string(), documenti: z.array(z.record(z.string(), ScalarSchema)) })).optional();
+const ShowInput = z.object({ messaggio: z.string(), spec: z.unknown(), dati_iniziali: SeedInput });
+const PatchInput = PatchSchema.extend({ messaggio: z.string(), dati_iniziali: SeedInput });
 const QueryInput = z.object({ query: QuerySchema });
+
+/** Pauses between attempts when the provider is busy: two more tries, then the error is the user's to see. */
+const RETRY_WAITS = [1000, 4000];
+const RETRY_STATUS = new Set([408, 429, 500, 502, 503, 529]);
+const RETRY_TYPE = new Set(["overloaded_error", "rate_limit_error", "api_error"]);
+/** A failure worth trying again: the provider is overloaded, rate limiting, or had a hiccup (also when it says so mid-stream). */
+function transient(e: unknown): boolean {
+  const err = e as { name?: unknown; status?: unknown; type?: unknown; error?: { type?: unknown; error?: { type?: unknown } } } | null;
+  if (!err || err.name === "AbortError") return false;
+  if (typeof err.status === "number") return RETRY_STATUS.has(err.status);
+  return [err.type, err.error?.type, err.error?.error?.type].some((t) => typeof t === "string" && RETRY_TYPE.has(t));
+}
+const sleep = (ms: number, signal?: AbortSignal) => new Promise<void>((resolve, reject) => {
+  const t = setTimeout(resolve, ms);
+  signal?.addEventListener("abort", () => { clearTimeout(t); reject(signal.reason); }, { once: true });
+});
 const issues = (e: z.ZodError) => e.issues.map((i) => `${i.path.join(".")}: ${i.message}`);
 
 /** Readable reasoning of one model turn (empty unless summaries were requested). */
@@ -363,7 +396,7 @@ const thinkingText = (content: Block[]) =>
 /** Agentic run: the model may explore data and must call mostra_interfaccia to show a screen, or answer in text. */
 const TOOL_STATUS: Record<string, string> = {
   esegui_query: "Esploro i dati…", prepara_libreria: "Preparo le librerie…", mostra_interfaccia: "Costruisco l'interfaccia…",
-  crea_tabella: "Creo la tabella…", inserisci_righe: "Inserisco i dati…",
+  crea_tabella: "Creo la tabella…", inserisci_righe: "Inserisco i dati…", modifica_interfaccia: "Modifico l'interfaccia…",
 };
 
 const PREVIEW_EVERY_MS = 500;
@@ -403,7 +436,16 @@ export async function generate(input: GenerateInput, deps: Deps, progress?: (p: 
     status(i === 0 ? "Leggo la richiesta…" : "Proseguo…");
     if (streamed) { progress?.({ type: "thinking", text: "\n\n" }); streamed = false; }
     signal?.throwIfAborted();
-    const { content, stopReason, usage } = await deps.step({ system, messages, llm, on, signal });
+    let turn: Awaited<ReturnType<LlmStep>>;
+    for (let attempt = 0; ; attempt++) {
+      try { turn = await deps.step({ system, messages, llm, on, signal }); break; }
+      catch (e) {
+        if (signal?.aborted || attempt >= RETRY_WAITS.length || !transient(e)) throw e;
+        status("Il modello è occupato, riprovo…");
+        await (deps.wait ?? sleep)(RETRY_WAITS[attempt], signal);
+      }
+    }
+    const { content, stopReason, usage } = turn;
     if (usage) { used.input += usage.input; used.output += usage.output; used.any = true; }
     thoughts.push(...thinkingText(content));
     if (stopReason === "refusal") throw new GenerateError("Richiesta rifiutata dal modello");
@@ -449,13 +491,24 @@ export async function generate(input: GenerateInput, deps: Deps, progress?: (p: 
             reply(`${deps.tables.insert(String(i?.tabella), i?.righe)} righe inserite in ${String(i?.tabella)}`);
           }
         } catch (e) { reply(e instanceof z.ZodError ? issues(e).join("; ") : (e as Error).message, true); }
-      } else if (c.name === "mostra_interfaccia") {
-        const s = ShowInput.safeParse(c.input);
-        const spec = s.success ? SpecSchema.safeParse(s.data.spec) : null;
-        if (!s.success || !spec?.success) {
-          reply(`Spec non valida:\n- ${(s.success ? issues(spec!.error!) : issues(s.error)).join("\n- ")}`, true);
-          continue;
+      } else if (c.name === "mostra_interfaccia" || c.name === "modifica_interfaccia") {
+        // Both end the same way: a whole spec to verify. One brings it written out, the other as changes to the current one.
+        let raw: unknown, messaggio: string, seedItems: z.infer<typeof SeedInput>;
+        if (c.name === "mostra_interfaccia") {
+          const s = ShowInput.safeParse(c.input);
+          if (!s.success) { reply(`Spec non valida:\n- ${issues(s.error).join("\n- ")}`, true); continue; }
+          ({ spec: raw, messaggio, dati_iniziali: seedItems } = s.data);
+        } else {
+          if (!input.currentSpec || input.navigate) { reply("Qui non c'è un'interfaccia da modificare: scrivila intera con mostra_interfaccia", true); continue; }
+          const p = PatchInput.safeParse(c.input);
+          if (!p.success) { reply(`Modifica non valida:\n- ${issues(p.error).join("\n- ")}`, true); continue; }
+          const { appId: _id, screens: _others, procedural: _how, ...base } = input.currentSpec;
+          const patched = applyPatch(base, p.data);
+          if (patched.problems.length) { reply(`Modifica non applicata, correggi:\n- ${patched.problems.join("\n- ")}`, true); continue; }
+          raw = patched.spec; messaggio = p.data.messaggio; seedItems = p.data.dati_iniziali;
         }
+        const spec = SpecSchema.safeParse(raw);
+        if (!spec.success) { reply(`Spec non valida:\n- ${issues(spec.error).join("\n- ")}`, true); continue; }
         status("Verifico l'interfaccia…");
         const problems = [...specProblems(spec.data, schema), ...await customProblems(spec.data, deps.libraries)];
         // A screen reached by a route with parameters must take them as variables: it is kept and reused for every value.
@@ -467,11 +520,11 @@ export async function generate(input: GenerateInput, deps: Deps, progress?: (p: 
         const collections = rest.collections ?? [];
         const procedural = input.mode === "procedural" || !!input.currentSpec?.procedural;
         const shown: Spec = { ...rest, ...(collections.length ? { appId: current.id } : {}), ...(procedural ? { procedural: true } : {}) };
-        if (collections.length && s.data.dati_iniziali?.length) {
-          try { deps.seed?.({ id: current.id, collections }, s.data.dati_iniziali); }
+        if (collections.length && seedItems?.length) {
+          try { deps.seed?.({ id: current.id, collections }, seedItems); }
           catch (e) { reply(`Dati iniziali non validi, correggi:\n- ${(e as Error).message}`, true); continue; }
         }
-        return done({ spec: shown, message: s.data.messaggio });
+        return done({ spec: shown, message: messaggio });
       } else {
         reply(`Strumento sconosciuto: ${c.name}`, true);
       }

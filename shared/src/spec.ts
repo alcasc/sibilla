@@ -87,7 +87,7 @@ export const StyleSchema = o({
 });
 export type SpecStyle = z.infer<typeof StyleSchema>;
 
-const VariablesSchema = z.array(o({ name: z.string(), type: z.enum(["string", "number", "date"]), default: z.union([z.string(), z.number(), z.null()]) }));
+export const VariablesSchema = z.array(o({ name: z.string(), type: z.enum(["string", "number", "date"]), default: z.union([z.string(), z.number(), z.null()]) }));
 
 /**
  * A screen of the app other than the first, reached by a route. Screens are generated the first time someone gets there

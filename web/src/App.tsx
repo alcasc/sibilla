@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ArrowLeftIcon, HouseIcon, LayoutDashboardIcon, MessageSquareIcon, PanelLeftOpenIcon } from "lucide-react";
 import { Toaster, toast } from "@/components/ui/toast";
-import { HOME, partialSpec, screenSpec, withScreen, type Route, type DbSchema, type Effort, type InterfaceDetail, type InterfaceSummary, type ProviderStatus, type Spec } from "@sibilla/shared";
+import { HOME, matchRoute, partialSpec, routeUrl, screenSpec, withScreen, type Route, type DbSchema, type Effort, type InterfaceDetail, type InterfaceSummary, type ProviderStatus, type Spec } from "@sibilla/shared";
 import { Button } from "@/components/ui/button";
 import { api } from "./api";
 import type { Attachment } from "./attachments";
@@ -30,6 +30,24 @@ const titleOf = (prompt: string) => {
   const t = prompt.replace(/\s+/g, " ").trim();
   return t.length > 48 ? `${t.slice(0, 47).trimEnd()}…` : t;
 };
+
+/** The address of a conversation: "/c/12/clienti/7" is conversation 12, and the rest a place in its app. */
+const parseUrl = (pathname: string) => {
+  const m = /^\/c\/(\d+)(\/.*)?$/.exec(pathname);
+  return m ? { id: Number(m[1]), rest: m[2] ?? "" } : null;
+};
+
+/** The screen an address points to. One that doesn't exist (yet, or any more) is the first screen. */
+function routeFromUrl(app: Spec | null, rest: string): Route {
+  const found = app ? matchRoute((app.screens ?? []).map((s) => s.path), rest) : null;
+  if (!found || found.path === HOME) return { path: HOME, params: {} };
+  const variables = app!.screens!.find((s) => s.path === found.path)!.variables;
+  // The address only has text: a parameter the screen declares as a number goes back to being one.
+  const params = Object.fromEntries(Object.entries(found.params).map(([name, value]) =>
+    [name, variables.find((v) => v.name === name)?.type === "number" && value.trim() !== "" && !Number.isNaN(Number(value)) ? Number(value) : value]));
+  return { path: found.path, params };
+}
+const sameRoute = (a: Route | undefined, b: Route) => !!a && a.path === b.path && JSON.stringify(a.params) === JSON.stringify(b.params);
 
 export default function App() {
   const [list, setList] = useState<InterfaceSummary[]>([]);
@@ -66,12 +84,18 @@ export default function App() {
   /** Stops the generation on screen. */
   const stopper = useRef<AbortController | null>(null);
 
+  /** True while the screen is catching up with the address (a reload, back/forward): the address is not to be rewritten meanwhile. */
+  const applyingUrl = useRef(parseUrl(location.pathname) !== null);
+
   const fail = (e: unknown) => toast.error((e as Error).message);
   const reloadList = () => Promise.resolve(api.listInterfaces()).then((l) => setList(l ?? []), fail);
   useEffect(() => {
     reloadList();
     Promise.resolve(api.schema()).then((s) => setSchema(s ?? null), () => setSchema(null));
     Promise.resolve(api.providers()).then((p) => setProviders(p ?? []), () => setProviders([]));
+    // A reload or a shared address reopens the conversation and the screen it points to.
+    const at = parseUrl(location.pathname);
+    if (at) open(at.id, at.rest).then((ok) => { applyingUrl.current = false; if (!ok) window.history.replaceState(null, "", "/"); });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -83,9 +107,10 @@ export default function App() {
     else Promise.resolve(api.schema()).then((s) => s && setSchema(s), () => {});
   };
 
-  async function act(fn: () => Promise<void>) {
+  /** Runs something that can fail, telling the user if it does; resolves to whether it went well. */
+  async function act(fn: () => Promise<void>): Promise<boolean> {
     setBusy(true);
-    try { await fn(); } catch (e) { fail(e); } finally { setBusy(false); }
+    try { await fn(); return true; } catch (e) { fail(e); return false; } finally { setBusy(false); }
   }
 
   /**
@@ -185,13 +210,14 @@ export default function App() {
     } catch { toast.error("Non sono riuscita a salvare la conversazione"); }
   }
 
-  const load = (id: number, version?: number) => act(async () => {
+  /** `at`: the place in the app to open, as written in the address; the first screen otherwise. */
+  const load = (id: number, version?: number, at = "") => act(async () => {
     const detail = await api.getInterface(id);
     const n = version ?? detail.latestVersion;
     const v = n === null ? null : await api.getVersion(id, n);
     setCurrent({ detail, version: v?.numero ?? null, savedSpec: v?.spec ?? null });
     setSpec(v?.spec ?? null);
-    setRoute({ path: HOME, params: {} });
+    setRoute(routeFromUrl(v?.spec ?? null, at));
     setTrail([]);
   });
 
@@ -204,7 +230,7 @@ export default function App() {
   const back = () => { const prev = trail.at(-1); if (prev) { setRoute(prev); setTrail(trail.slice(0, -1)); } };
   const home = () => { setRoute({ path: HOME, params: {} }); setTrail([]); };
 
-  const open = (id: number) => {
+  const open = (id: number, at = "") => {
     setDb(null);
     if (mobile) { setNavOpen(false); setChatOpen(false); }
     epoch.current++; setLoading(false); setProgress(null); setHistory([]);
@@ -213,7 +239,7 @@ export default function App() {
       (m) => opened === epoch.current && setHistory(m.map(({ createdAt: _, ...msg }) => msg)),
       () => toast.error("Non sono riuscita a caricare la chat"),
     );
-    return load(id);
+    return load(id, undefined, at);
   };
 
   const reset = () => {
@@ -252,6 +278,30 @@ export default function App() {
     toast.success(`«${current.detail.nome}» eliminata`);
     reset();
     await reloadList();
+  });
+
+  // The address follows what is on screen, so reloading, going back and sharing a link land in the same place.
+  const url = current ? `/c/${current.detail.id}${routeUrl(route.path, route.params)}` : "/";
+  useEffect(() => {
+    if (!applyingUrl.current && location.pathname !== url) window.history.pushState(null, "", url);
+  }, [url]);
+  useEffect(() => {
+    const onPop = () => {
+      const to = parseUrl(location.pathname);
+      applyingUrl.current = true;
+      const done = () => { applyingUrl.current = false; };
+      if (!to) { reset(); done(); }
+      else if (current?.detail.id === to.id) {
+        const target = routeFromUrl(spec, to.rest);
+        setDb(null);
+        // Going back undoes the last step of the trail; anything else is a step forward.
+        setTrail((t) => (sameRoute(t.at(-1), target) ? t.slice(0, -1) : [...t, route]));
+        setRoute(target);
+        done();
+      } else open(to.id, to.rest).then(done);
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
   });
 
   // Three screens: the start of a new conversation, a conversation that is only chat so far, and an interface with its chat beside it.

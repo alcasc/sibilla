@@ -119,8 +119,8 @@ test("unsupported attachments are refused", () => {
 });
 
 test("tools are query, library, database changes and interface", () => {
-  expect(TOOLS.map((t) => t.name)).toEqual(["esegui_query", "prepara_libreria", "crea_tabella", "inserisci_righe", "mostra_interfaccia"]);
-  expect(JSON.stringify(TOOLS.at(-1)!.input_schema)).toContain('"nodes"');
+  expect(TOOLS.map((t) => t.name)).toEqual(["esegui_query", "prepara_libreria", "crea_tabella", "inserisci_righe", "mostra_interfaccia", "modifica_interfaccia"]);
+  expect(JSON.stringify(TOOLS.at(-2)!.input_schema)).toContain('"nodes"');
 });
 
 test("system prompt lists demo tables and hides internal ones", () => {
@@ -236,4 +236,60 @@ test("procedural: the first screen is marked, and a followed link generates only
   expect(asked).toMatch(/rotta \/clienti\/:id/);
   expect(asked).toMatch(/scheda del cliente con i suoi ordini/);
   expect(asked).toMatch(/SOLO la schermata di destinazione/);
+});
+
+const patch = (input: object): Block => ({ type: "tool_use", id: `t${++n}`, name: "modifica_interfaccia", input });
+
+test("a small change is applied as a patch to the current interface", async () => {
+  const { step } = fake({ content: [patch({
+    messaggio: "Aggiunto lo stato", titolo: "Ordini e stati",
+    nodi: [{ ...spec().nodes[1], columns: [{ field: "id", label: "N.", format: "number" }, { field: "stato", label: "Stato", format: "badge" }] }],
+  })] });
+  const res = await generate(input({ prompt: "aggiungi lo stato", currentSpec: spec() }), deps(step));
+  expect(res.message).toBe("Aggiunto lo stato");
+  expect(res.spec).toMatchObject({ title: "Ordini e stati", nodes: [{ id: "root" }, { id: "t", columns: [{ field: "id" }, { field: "stato" }] }] });
+});
+
+test("a patch that breaks the interface goes back as an error and nothing is applied", async () => {
+  const bad = { ...spec().nodes[1], columns: [{ field: "inesistente", label: "?", format: "text" }] };
+  const { step, calls } = fake(
+    { content: [patch({ messaggio: "x", nodi: [bad] })] },
+    { content: [patch({ messaggio: "x", rimuovi: ["nessuno"] })] },
+    { content: [text("Non riesco.")] },
+  );
+  expect(await generate(input({ currentSpec: spec() }), deps(step))).toEqual({ spec: null, message: "Non riesco." });
+  const errors = [1, 2].map((i) => (calls[i].messages.at(-1)!.content as { is_error?: boolean; content: string }[])[0]);
+  expect(errors[0]).toMatchObject({ is_error: true, content: expect.stringContaining("inesistente") });
+  expect(errors[1]).toMatchObject({ is_error: true, content: expect.stringContaining("nessun nodo con id nessuno") });
+});
+
+test("a patch needs an interface to change", async () => {
+  const { step, calls } = fake({ content: [patch({ messaggio: "x", titolo: "Nuovo" })] }, { content: [show(spec())] });
+  expect((await generate(input(), deps(step))).spec).toEqual(spec());
+  expect(JSON.stringify(calls[1].messages.at(-1)!.content)).toContain("mostra_interfaccia");
+});
+
+test("a busy provider is tried again before the error reaches the user", async () => {
+  const waits: number[] = [];
+  let attempts = 0;
+  const step: LlmStep = async () => {
+    if (++attempts < 3) throw Object.assign(new Error("Overloaded"), { status: 529 });
+    return { content: [text("Eccomi.")], stopReason: "end_turn" };
+  };
+  const seen: string[] = [];
+  const res = await generate(input(), { ...deps(step), wait: async (ms) => { waits.push(ms); } }, (p) => { if (p.type === "status") seen.push(p.text); });
+  expect(res.message).toBe("Eccomi.");
+  expect(waits).toEqual([1000, 4000]);
+  expect(seen).toContain("Il modello è occupato, riprovo…");
+});
+
+test("retries stop after two, and never happen for errors that would not pass", async () => {
+  let attempts = 0;
+  const busy: LlmStep = async () => { attempts++; throw Object.assign(new Error("Overloaded"), { error: { error: { type: "overloaded_error" } } }); };
+  await expect(generate(input(), { ...deps(busy), wait: async () => {} })).rejects.toThrow("Overloaded");
+  expect(attempts).toBe(3);
+  attempts = 0;
+  const wrongKey: LlmStep = async () => { attempts++; throw Object.assign(new Error("Unauthorized"), { status: 401 }); };
+  await expect(generate(input(), { ...deps(wrongKey), wait: async () => {} })).rejects.toThrow("Unauthorized");
+  expect(attempts).toBe(1);
 });

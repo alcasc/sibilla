@@ -1,3 +1,4 @@
+import { routeParams } from "./routes";
 import type { Scalar, Screen, Spec } from "./spec";
 
 export const HOME = "/";
@@ -27,7 +28,10 @@ export function screenSpec(app: Spec, route: Route): Spec | null {
 export function withScreen(app: Spec | null, path: string, made: Spec, message?: string): Spec {
   const { screens: _ignored, ...screen } = made;
   if (!app || path === HOME) return { ...screen, ...(app?.screens?.length ? { screens: app.screens } : {}) };
-  const entry: Screen = { path, title: made.title, variables: made.variables, nodes: made.nodes, ...(message ? { message } : {}) };
+  // The screen is kept for every value of its route parameters: the one it was built or edited with must not stick.
+  const params = routeParams(path);
+  const variables = made.variables.map((v) => (params.includes(v.name) ? { ...v, default: null } : v));
+  const entry: Screen = { path, title: made.title, variables, nodes: made.nodes, ...(message ? { message } : {}) };
   return {
     ...app,
     ...(made.appId ? { appId: made.appId } : {}),

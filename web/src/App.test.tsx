@@ -200,3 +200,40 @@ test("a link generates its screen the first time, then just opens it; back retur
   expect(await screen.findByRole("heading", { name: "Report vendite" })).toBeInTheDocument();
   expect(mocked.generate).toHaveBeenCalledTimes(1); // kept: not generated again
 });
+
+test("the address follows the open conversation, and going back returns to the start", async () => {
+  render(<App />);
+  expect(location.pathname).toBe("/");
+  await userEvent.click(await sidebar().findByRole("button", { name: /Vendite/ }));
+  await screen.findByRole("heading", { name: "Vista v2" });
+  expect(location.pathname).toBe("/c/1");
+
+  // What the browser's back button does: the address changes, then the app is told.
+  window.history.replaceState(null, "", "/");
+  window.dispatchEvent(new PopStateEvent("popstate"));
+  expect(await screen.findByRole("heading", { name: /cosa costruiamo/ })).toBeInTheDocument();
+  expect(location.pathname).toBe("/");
+});
+
+test("an address reopens its conversation on the screen it points to", async () => {
+  const h = (text: string) => ({ id: "h", parentId: "root", type: "heading" as const, text, level: 1 as const });
+  const root = { id: "root", parentId: null, type: "stack" as const, direction: "column" as const };
+  const app: Spec = {
+    title: "Vendite", variables: [], nodes: [root, h("Elenco clienti")],
+    screens: [{ path: "/clienti/:id", title: "Scheda", variables: [{ name: "id", type: "number", default: null }], nodes: [root, h("Scheda cliente")] }],
+  };
+  mocked.getVersion.mockResolvedValue({ numero: 2, spec: app, prompt: null, createdAt: "x" });
+  window.history.replaceState(null, "", "/c/1/clienti/7");
+  render(<App />);
+  expect(await screen.findByRole("heading", { name: "Scheda cliente" })).toBeInTheDocument();
+  expect(mocked.getInterface).toHaveBeenCalledWith(1);
+  expect(location.pathname).toBe("/c/1/clienti/7");
+});
+
+test("an address of a conversation that is gone falls back to the start", async () => {
+  mocked.getInterface.mockRejectedValueOnce(new Error("Non trovato"));
+  window.history.replaceState(null, "", "/c/99");
+  render(<App />);
+  await waitFor(() => expect(location.pathname).toBe("/"));
+  expect(await screen.findByRole("heading", { name: /cosa costruiamo/ })).toBeInTheDocument();
+});
