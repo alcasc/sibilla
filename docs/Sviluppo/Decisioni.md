@@ -44,4 +44,12 @@ Per partire senza servizi esterni: `npm install` e funziona. Il costo è che non
 
 ## Interfaccia quieta
 
-Colore sui dati e sull'azione principale, non sulla cornice: voce attiva in grigio, niente ombre a riposo, niente icone decorative. La sfera è l'unico elemento animato ed è il segno del prodotto.
+Colore sui dati e sull'azione principale, non sulla cornice: voce attiva in grigio, niente ombre a riposo, niente icone decorative. La sfera è il segno del prodotto. Il movimento c'è solo dove dice qualcosa: la sfera, il pulsante di invio che si riempie con l'impegno, la risposta che arriva, il pallino che segue la conversazione aperta. Con «riduci movimento» attivo nel dispositivo tutto resta fermo.
+
+## Modificare con una patch
+
+Per una richiesta piccola il modello non riscrive la spec: manda solo ciò che cambia (`modifica_interfaccia`). La spec è una lista piatta di nodi con `id`, quindi sostituire, aggiungere, togliere e spostare bastano; il risultato passa dagli stessi controlli di una spec intera, così una patch sbagliata non può lasciare l'interfaccia a metà. Il costo è uno strumento in più da scegliere: il prompt dice quando usare l'uno e quando l'altro.
+
+## Impegno scelto tenendo premuto
+
+L'impegno non è un'impostazione da ricordare ma un gesto sul messaggio: tocco per una risposta rapida, pressione lunga per farla ragionare di più. Il tocco parte dal livello più basso perché l'esperimento punta ad app che compaiono in fretta; chi vuole più cura la chiede sul momento.

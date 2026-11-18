@@ -40,8 +40,11 @@ Ogni collegamento porta un `intent`: la descrizione di cosa deve mostrare la des
 
 Quello che l'utente chiede in chat vale per la schermata che sta guardando: le altre restano intatte.
 
+## Nell'indirizzo del browser
+
+La conversazione e la schermata stanno nell'indirizzo: `/c/12` è la prima schermata della conversazione 12, `/c/12/clienti/7` la rotta `/clienti/:id` con `id = 7` (`routeUrl` e `matchRoute` in `shared/src/routes.ts`). Ricaricare, andare avanti e indietro e i preferiti riportano nello stesso punto. Un indirizzo che punta a una schermata non ancora generata apre la prima.
+
 ## Limiti
 
 - Chi apre l'app da un link pubblico naviga solo tra le schermate già generate.
-- Le rotte non finiscono nell'indirizzo del browser: ricaricando si torna alla prima schermata.
 - Rigenerare una schermata esistente si fa chiedendolo in chat mentre la si guarda; non c'è un comando apposito.

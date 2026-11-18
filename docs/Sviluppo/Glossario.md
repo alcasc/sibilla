@@ -21,6 +21,7 @@ tags: [sviluppo]
 | **Conversazione** | Una chat con le sue versioni; nel codice si chiama ancora *interface* |
 | **Versione** | Uno stato salvato della spec di una conversazione |
 | **Fornitore** | Chi serve un modello: Anthropic, OpenAI, Google |
-| **Impegno** | Quanto lavora il modello su una richiesta (*effort*) |
+| **Impegno** | Quanto lavora il modello su una richiesta (*effort*); si sceglie tenendo premuto il pulsante di invio |
+| **Patch** | Una modifica a un'interfaccia esistente scritta come sole differenze (`modifica_interfaccia`) |
 | **LlmStep** | La funzione che esegue un turno del modello; ogni fornitore ne ha una |
 | **Link pubblico** | Un indirizzo con un token che apre solo una mini app, senza account |

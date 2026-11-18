@@ -15,8 +15,10 @@ Proposte su cosa aggiungere e migliorare, in ordine di priorità dentro ogni gru
   Come: una chiave da Google AI Studio, poi lo script sopra. Se lo schema della spec viene rifiutato, passare a Gemini una versione ridotta (senza `anyOf` annidati) o lo schema come testo nel prompt.
 - [ ] **Anteprima in tempo reale anche con GPT e Gemini.**
   Come: in `openai.ts` ascoltare `response.function_call_arguments.delta`, in `gemini.ts` le parti `functionCall` parziali; ricostruire il JSON incompleto e chiamare `on.input`, come già fa Claude.
-- [ ] **Riprovare da soli sugli errori passeggeri.**
-  Come: in `generate.ts`, un nuovo tentativo del passo su 429/503/529 con attesa crescente, prima di mostrare l'errore.
+- [x] **Riprovare da soli sugli errori passeggeri.**
+  Fatto in `generate.ts`: due nuovi tentativi (dopo 1 e 4 secondi) su 408/429/5xx e `overloaded_error`.
+- [ ] **Misurare le modifiche a patch con modelli veri.**
+  Come: nello script `test:live`, una richiesta di modifica piccola su una vista esistente; controllare che arrivi `modifica_interfaccia` e quanto tempo fa risparmiare.
 - [ ] **Prezzi e modelli aggiornati senza toccare il codice.**
   Come: spostare l'elenco di `shared/src/llm.ts` in un file JSON letto all'avvio, o leggere i modelli dalle API dei fornitori.
 
@@ -37,8 +39,10 @@ Proposte su cosa aggiungere e migliorare, in ordine di priorità dentro ogni gru
 
 ## 3. Esperienza d'uso
 
-- [ ] **Rotte nell'indirizzo del browser.**
-  Come: scrivere conversazione e rotta nell'URL (`/c/12/clienti/7`) con la History API, così ricaricare, tornare indietro e condividere un punto preciso funzionano.
+- [x] **Rotte nell'indirizzo del browser.**
+  Fatto: conversazione e rotta nell'URL (`/c/12/clienti/7`) con la History API. Restano fuori la versione in esame e la schermata Database.
+- [ ] **Anteprima anche per le modifiche a patch.**
+  Come: applicare la patch incompleta alla spec corrente mentre arriva (`on.input` di `modifica_interfaccia`) e mostrarla come anteprima.
 - [ ] **Annullare e confrontare le versioni.**
   Come: un pulsante «Annulla ultima modifica» che ripristina la versione precedente, e una vista che affianca due versioni.
 - [ ] **Modifica diretta, senza chat.**

@@ -39,3 +39,4 @@ Sibilla in una frase: descrivi in chat l'interfaccia o la mini app che ti serve,
 ## Storia
 
 - [Design iniziale](Storia/specs/2026-11-13-sibilla-design.md) e [piano della prova di concetto](Storia/plans/2026-11-13-sibilla-poc.md): com'era pensata all'inizio. Sono documenti d'epoca, superati in più punti dalle note qui sopra.
+- [Una sessione con Claude Code](Storia/sessioni/2026-11-18-sessione-claude-code.md): le richieste di una giornata di lavoro e cosa ne è uscito, come demo del metodo.

@@ -15,8 +15,20 @@ Il codice è in `server/src/generate.ts`. Una richiesta è un **ciclo**: il mode
 | `crea_tabella` | Crea una tabella nel database. |
 | `inserisci_righe` | Inserisce righe in una tabella, tutte o nessuna. |
 | `mostra_interfaccia` | Consegna la [spec](Spec.md) e un messaggio per l'utente. Può portare `dati_iniziali` per riempire le collezioni appena create. |
+| `modifica_interfaccia` | Cambia l'interfaccia corrente scrivendo **solo ciò che cambia**: nodi da sostituire o aggiungere (per `id`), da togliere, da spostare; titolo, stile, variabili e collezioni. |
 
 Se la spec non è valida il modello riceve l'elenco dei problemi come risultato dello strumento e riprova. Lo stesso vale per una query sbagliata o una riga rifiutata.
+
+### Modifiche a patch
+
+Riscrivere una spec intera per cambiare un'etichetta costa decine di secondi. Con `modifica_interfaccia` il modello manda una *patch* (`shared/src/patch.ts`): `applyPatch` la applica alla schermata corrente e il risultato passa dagli **stessi controlli** di una spec scritta per intero. Se non regge, nulla viene applicato e il modello riceve i problemi.
+
+- `nodi`: ogni nodo sostituisce quello con lo stesso `id`; un `id` nuovo viene aggiunto in fondo ai fratelli.
+- `rimuovi`: toglie i nodi indicati con tutto ciò che contengono.
+- `sposta`: mette un nodo subito dopo un fratello (o per primo).
+- `titolo`, `stile` (solo le chiavi indicate), `variabili` e `collections` (per nome).
+
+Non vale quando si genera una schermata nuova da un link: lì non c'è nulla da modificare.
 
 ## Il prompt
 
@@ -49,6 +61,10 @@ Per aggiungere un fornitore: un nuovo file che implementa `LlmStep`, una riga in
 - `result` oppure `error`: la fine.
 
 Se il client chiude la connessione (il pulsante **Ferma**), il server annulla la chiamata al modello.
+
+## Errori passeggeri
+
+Se un turno fallisce perché il fornitore è sovraccarico o limita le richieste (408, 429, 500, 502, 503, 529, o un `overloaded_error` a metà risposta), il ciclo lo ripete dopo 1 e poi 4 secondi, mostrando «Il modello è occupato, riprovo…». Gli altri errori (chiave sbagliata, richiesta rifiutata) arrivano subito all'utente.
 
 ## Costi
 

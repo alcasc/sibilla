@@ -26,7 +26,8 @@ Cosa non c'è, cosa è fragile e cosa non è mai stato verificato. Tenere questa
 
 ## Generazione
 
-- L'anteprima mentre l'interfaccia viene scritta funziona solo con i modelli Claude.
+- L'anteprima mentre l'interfaccia viene scritta funziona solo con i modelli Claude, e solo quando la spec viene scritta per intero: una modifica a patch compare a fine lavoro.
+- Le modifiche a patch (`modifica_interfaccia`) sono provate solo con il modello finto dei test: quanto spesso un modello vero le scelga, e le scriva giuste, va ancora osservato.
 - Le query strutturate non esprimono `OR`, sottoquery o espressioni calcolate.
 - Dalla chat il modello non può modificare né eliminare tabelle.
 - Il ragionamento mostrato è un riassunto, e non sempre c'è: a impegno basso il modello può non ragionare.
@@ -34,7 +35,7 @@ Cosa non c'è, cosa è fragile e cosa non è mai stato verificato. Tenere questa
 ## Modalità passo per passo
 
 - Dal link pubblico non si generano schermate nuove.
-- Le rotte non stanno nell'indirizzo del browser: ricaricando si torna alla prima schermata.
+- L'indirizzo del browser non ricorda la versione che si sta guardando né la schermata Database: ricaricando si torna all'ultima versione.
 - Non c'è un comando per rigenerare o eliminare una singola schermata.
 
 ## Interfaccia
@@ -46,7 +47,6 @@ Cosa non c'è, cosa è fragile e cosa non è mai stato verificato. Tenere questa
 ## Idee per dopo
 
 - Postgres, con permessi per riga e chiavi per utente.
-- Rotte nell'indirizzo del browser, con cronologia.
 - Modifica dello schema delle tabelle (rinomina, elimina colonna).
 - Limiti di spesa e riepilogo dei costi.
 - Traduzioni.

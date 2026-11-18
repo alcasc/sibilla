@@ -23,6 +23,7 @@ Vitest esegue due gruppi (`vitest.config.ts`): `shared` e `server` in Node, `web
 
 - Testing Library, con `api` sostituita da funzioni finte (`vi.mock("./api")`).
 - Si prova ciò che l'utente vede e fa: scrivere, cliccare, leggere il risultato.
+- In jsdom «riduci movimento» risulta attivo (`test-setup.ts`): le risposte animate compaiono subito e i test non dipendono dai tempi. Dopo ogni test l'indirizzo torna a `/`.
 
 ## Provare dal vivo senza toccare i propri dati
 
