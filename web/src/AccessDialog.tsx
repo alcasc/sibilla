@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { CheckCircle2Icon, ExternalLinkIcon } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "@/components/ui/toast";
 import { PROVIDERS, type ProviderId, type ProviderStatus } from "@sibilla/shared";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";

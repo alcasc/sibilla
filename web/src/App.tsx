@@ -1,9 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { ArrowLeftIcon, HouseIcon, LayoutDashboardIcon, MessageSquareIcon, PanelLeftOpenIcon } from "lucide-react";
-import { toast } from "sonner";
-import { HOME, partialSpec, screenSpec, withScreen, type Route, type DbSchema, type InterfaceDetail, type InterfaceSummary, type ProviderStatus, type Spec } from "@sibilla/shared";
+import { Toaster, toast } from "@/components/ui/toast";
+import { HOME, partialSpec, screenSpec, withScreen, type Route, type DbSchema, type Effort, type InterfaceDetail, type InterfaceSummary, type ProviderStatus, type Spec } from "@sibilla/shared";
 import { Button } from "@/components/ui/button";
-import { Toaster } from "@/components/ui/sonner";
 import { api } from "./api";
 import type { Attachment } from "./attachments";
 import { CanvasHeader } from "./CanvasHeader";
@@ -94,7 +93,11 @@ export default function App() {
    * With `nav`, the user followed a link to a screen that doesn't exist yet: it is generated now, shown, and kept.
    * `fresh` starts a new conversation with it, whatever is open.
    */
-  async function send(prompt: string, attachments: Attachment[] = [], nav?: Nav, fresh = false) {
+  /** What the composers send: a message in the current conversation, at the effort picked by holding send. */
+  const ask = (prompt: string, attachments: Attachment[] = [], effort?: Effort) => send(prompt, attachments, undefined, false, effort);
+
+  /** `effort`: chosen for this message by holding send in the composer; otherwise the default in the settings. */
+  async function send(prompt: string, attachments: Attachment[] = [], nav?: Nav, fresh = false, effort?: Effort) {
     if (fresh) reset();
     if (!nav) setChatOpen(true);
     const origin: Route = fresh ? { path: HOME, params: {} } : route;
@@ -133,7 +136,7 @@ export default function App() {
     stopper.current = stop;
     try {
       const res = await api.generate({
-        prompt, currentSpec, attachments, llm, history: nav ? [] : context,
+        prompt, currentSpec, attachments, llm: effort ? { ...llm, effort } : llm, history: nav ? [] : context,
         mode: app?.procedural ? "procedural" : mode,
         ...(nav ? { navigate: {
           from: origin.path, to: nav.to, label: nav.label, intent: nav.intent, params: nav.params,
@@ -265,7 +268,7 @@ export default function App() {
   const cols = mobile ? "minmax(0,1fr)" : `${navOpen ? "16rem" : "0"} minmax(0,1fr) ${split && chatOpen ? "minmax(20rem,26rem)" : "0"}`;
   const chat = (variant: "panel" | "page") => (
     <Chat variant={variant} history={history} loading={loading} progress={progress} llm={llm} onLlmChange={setLlm}
-      providers={providers} onProvidersChange={setProviders} onSend={send} onStop={() => stopper.current?.abort()} onClose={() => setChatOpen(false)} />
+      providers={providers} onProvidersChange={setProviders} onSend={ask} onStop={() => stopper.current?.abort()} onClose={() => setChatOpen(false)} />
   );
 
   return (
@@ -334,11 +337,11 @@ export default function App() {
           <div className={`min-h-0 flex-1 ${navOpen ? "" : "pt-10"}`}>
             <DatabaseView schema={schema} table={db.table} loading={loading} llm={llm} providers={providers} onLlmChange={setLlm} onProvidersChange={setProviders}
               onSelect={(t) => setDb({ table: t })} onSchema={databaseChanged}
-              onAsk={(prompt, attachments) => send(prompt, attachments, undefined, true)} />
+              onAsk={(prompt, attachments, effort) => send(prompt, attachments, undefined, true, effort)} />
           </div>
         ) : start ? (
           <div className="flex-1 overflow-y-auto">
-            <Home mode={mode} onMode={setMode} schema={schema} loading={loading} llm={llm} providers={providers} onLlmChange={setLlm} onProvidersChange={setProviders} onSend={send} />
+            <Home mode={mode} onMode={setMode} schema={schema} loading={loading} llm={llm} providers={providers} onLlmChange={setLlm} onProvidersChange={setProviders} onSend={ask} />
           </div>
         ) : chatOnly ? <div className="min-h-0 flex-1">{chat("page")}</div> : split ? (
           <div data-view data-font={view.font || undefined} style={view.style}
@@ -349,7 +352,7 @@ export default function App() {
                 : (
                   // A link led to a screen that doesn't exist yet: it is being written right now.
                   <div role="status" className="flex min-h-[50vh] flex-col items-center justify-center gap-4 text-center text-sm text-muted-foreground">
-                    <Orb className="size-16" />
+                    <Orb className="size-16" state={loading ? "thinking" : "idle"} />
                     {loading ? (progress?.status || "Genero questa schermata…") : "Questa schermata non è stata generata."}
                   </div>
                 )}
@@ -365,7 +368,7 @@ export default function App() {
       )}
     </div>
     {appScope && <DataDialog open={dataOpen} app={appScope} onClose={() => setDataOpen(false)} onChange={() => setDataEpoch((n) => n + 1)} />}
-    <Toaster richColors />
+    <Toaster />
     </>
   );
 }

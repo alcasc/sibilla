@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { KeyRoundIcon } from "lucide-react";
-import { EFFORTS, MODELS, PROVIDERS, effortFor, modelInfo, type Effort, type LlmOptions, type ModelId, type ProviderStatus } from "@sibilla/shared";
+import { EFFORTS, MODELS, PROVIDERS, effortFor, modelInfo, type LlmOptions, type ModelId, type ProviderStatus } from "@sibilla/shared";
 import { Button } from "@/components/ui/button";
 import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -11,7 +11,11 @@ import { ProviderIcon } from "./ProviderIcon";
 
 const models = MODELS.map((m) => ({ value: m.id, label: m.label }));
 
-/** Compact control in the composer: which model answers, how hard it works, whether its reasoning is shown, and provider access. */
+/**
+ * Compact control in the composer: which model answers, whether its reasoning is shown, and provider access.
+ * How hard it works is chosen per message by holding send (see Composer); `llm.effort` remains the default for
+ * requests that don't come from the composer (suggestions, links, "ask to fix").
+ */
 export function LlmSettings({ llm, providers, onChange, onProvidersChange }: {
   llm: LlmOptions;
   /** Empty while unknown: every model is then offered. */
@@ -21,8 +25,6 @@ export function LlmSettings({ llm, providers, onChange, onProvidersChange }: {
 }) {
   const [access, setAccess] = useState(false);
   const model = modelInfo(llm.model);
-  const effort = EFFORTS.find((e) => e.id === llm.effort)!;
-  const efforts = EFFORTS.filter((e) => model.efforts.includes(e.id)).map((e) => ({ value: e.id, label: e.label }));
   const connected = (id: string) => providers.find((p) => p.id === id)?.configured ?? true;
   // A model that doesn't accept the current effort gets the closest one it does.
   const pick = (id: ModelId) => onChange({ model: id, effort: effortFor(id, llm.effort) });
@@ -32,7 +34,7 @@ export function LlmSettings({ llm, providers, onChange, onProvidersChange }: {
       <Popover>
         <PopoverTrigger render={<Button variant="ghost" size="sm" className="min-w-0 font-normal text-muted-foreground" aria-label="Modello e ragionamento" />}>
           <ProviderIcon provider={model.provider} />
-          <span className="truncate">{model.label} · {effort.label}</span>
+          <span className="truncate">{model.label}</span>
         </PopoverTrigger>
         <PopoverContent align="start" className="w-72">
           <FieldGroup>
@@ -58,14 +60,10 @@ export function LlmSettings({ llm, providers, onChange, onProvidersChange }: {
                 {connected(model.provider) ? model.hint : `${PROVIDERS.find((p) => p.id === model.provider)!.label} non è collegato: aggiungi la chiave API.`}
               </FieldDescription>
             </Field>
-            <Field>
-              <FieldLabel htmlFor="llm-effort">Impegno</FieldLabel>
-              <Select items={efforts} value={llm.effort} onValueChange={(v) => v && onChange({ effort: v as Effort })}>
-                <SelectTrigger id="llm-effort" className="w-full"><SelectValue /></SelectTrigger>
-                <SelectContent>{efforts.map((e) => <SelectItem key={e.value} value={e.value}>{e.label}</SelectItem>)}</SelectContent>
-              </Select>
-              <FieldDescription>Più impegno: risultati più curati, ma più tempo e costo.</FieldDescription>
-            </Field>
+            <p className="text-sm text-muted-foreground">
+              <span className="font-medium text-foreground">Impegno:</span> tieni premuto invia per far ragionare di più il modello
+              ({model.efforts.map((id) => EFFORTS.find((e) => e.id === id)!.label.toLowerCase()).join(" → ")}). Più impegno: risultati più curati, ma più tempo e costo.
+            </p>
             <Field orientation="horizontal">
               <FieldLabel htmlFor="llm-thinking">Mostra il ragionamento</FieldLabel>
               <Switch id="llm-thinking" checked={llm.thinking} onCheckedChange={(c) => onChange({ thinking: c })} />

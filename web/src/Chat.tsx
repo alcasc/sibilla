@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { PanelRightCloseIcon } from "lucide-react";
-import type { GenerateUsage, LlmOptions, ProviderStatus, Spec } from "@sibilla/shared";
+import type { Effort, GenerateUsage, LlmOptions, ProviderStatus, Spec } from "@sibilla/shared";
+import { AiStatus, type AiStatusState } from "@/components/ui/ai-status";
 import { Button } from "@/components/ui/button";
+import { StreamingResponse } from "@/components/ui/streaming-response";
 import type { Attachment } from "./attachments";
 import { Composer } from "./Composer";
 import { Markdown } from "./Markdown";
@@ -19,11 +21,24 @@ const dollars = new Intl.NumberFormat("it-IT", { style: "currency", currency: "U
 const usageLine = (u: GenerateUsage) =>
   `${tokens.format(u.inputTokens + u.outputTokens)} token${u.cost === null ? "" : `, circa ${dollars.format(u.cost)}`}`;
 
-/** Seconds since the generation started, so a long wait visibly moves. */
-function Elapsed() {
-  const [s, setS] = useState(0);
-  useEffect(() => { const t = setInterval(() => setS((x) => x + 1), 1000); return () => clearInterval(t); }, []);
-  return <span className="tabular-nums">{s >= 60 ? `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}` : `${s}s`}</span>;
+/** What the server says it is doing, as one of the status states (the label itself stays the server's). */
+function statusState(text: string | undefined): AiStatusState {
+  if (!text) return "thinking";
+  if (/^(Esploro|Leggo)/.test(text)) return "researching";
+  if (/^Verifico/.test(text)) return "analyzing";
+  if (/^(Costruisco|Creo|Inserisco|Preparo)/.test(text)) return "writing";
+  return "thinking";
+}
+
+/**
+ * An answer from Sibilla. One that arrives while the chat is open develops into focus word by word;
+ * one already in the history (a reopened conversation) shows at once.
+ */
+function Reply({ text, fresh }: { text: string; fresh: boolean }) {
+  // Mounting as "streaming" starts from nothing; switching to "done" right away lets it play out to the end.
+  const [status, setStatus] = useState<"streaming" | "done">(fresh ? "streaming" : "done");
+  useEffect(() => { setStatus("done"); }, []);
+  return <StreamingResponse text={text} status={status} className="text-sm leading-relaxed [&_[data-slot=streaming-response-actions]]:text-muted-foreground" />;
 }
 
 export function Chat({ history, loading, progress, llm, providers = [], onLlmChange, onProvidersChange = () => {}, onSend, onStop, onClose, variant = "panel" }: {
@@ -34,13 +49,20 @@ export function Chat({ history, loading, progress, llm, providers = [], onLlmCha
   onLlmChange: (patch: Partial<LlmOptions>) => void;
   providers?: ProviderStatus[];
   onProvidersChange?: (p: ProviderStatus[]) => void;
-  onSend: (prompt: string, attachments: Attachment[]) => void;
+  onSend: (prompt: string, attachments: Attachment[], effort: Effort) => void;
   onStop?: () => void;
   onClose?: () => void;
   /** "panel": beside the interface it builds. "page": the whole screen, while the conversation has no interface yet. */
   variant?: "panel" | "page";
 }) {
   const end = useRef<HTMLDivElement>(null);
+  // Replies from this index on arrived during a run seen here, so they play in; earlier ones are history.
+  const [freshFrom, setFreshFrom] = useState(Infinity);
+  const [wasLoading, setWasLoading] = useState(loading);
+  if (loading !== wasLoading) {
+    setWasLoading(loading);
+    if (loading) setFreshFrom(history.length);
+  }
   useEffect(() => { end.current?.scrollIntoView?.({ behavior: "smooth" }); }, [history.length, loading, progress?.status, progress?.thinking]);
   const page = variant === "page";
   const column = page ? "mx-auto w-full max-w-3xl" : "";
@@ -72,7 +94,7 @@ export function Chat({ history, loading, progress, llm, providers = [], onLlmCha
                   <div className="mt-2"><Markdown text={m.thinking} /></div>
                 </details>
               )}
-              {m.role === "assistant" ? <Markdown text={m.content} /> : <p className="whitespace-pre-wrap">{m.content}</p>}
+              {m.role === "assistant" ? <Reply text={m.content} fresh={i >= freshFrom} /> : <p className="whitespace-pre-wrap">{m.content}</p>}
               {!!m.attachments?.length && (
                 <p className="mt-1 text-xs opacity-80">{m.attachments.join(", ")}</p>
               )}
@@ -80,16 +102,15 @@ export function Chat({ history, loading, progress, llm, providers = [], onLlmCha
             </div>
           ))}
           {loading && (
-            <div className="flex flex-col gap-2 text-sm text-muted-foreground" role="status">
+            <div className="flex flex-col gap-2 text-sm text-muted-foreground">
               {progress?.thinking.trim() && (
                 <div className="rounded-lg border bg-background/60 px-3 py-2 text-xs">
                   <p className="mb-1 font-medium">Ragionamento</p>
                   <Markdown text={progress.thinking} />
                 </div>
               )}
-              <div className="flex items-center gap-2">
-                <Orb className="size-5" /> <span className="flex-1">{progress?.status || "Sibilla sta lavorando…"}</span> <Elapsed />
-              </div>
+              <AiStatus state={statusState(progress?.status)} label={progress?.status || "Sibilla sta lavorando…"}
+                icon={<Orb className="size-5" state="thinking" />} className="text-sm" />
             </div>
           )}
           <div ref={end} />

@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useState, type FormEvent } from "react";
-import { toast } from "sonner";
+import { toast } from "@/components/ui/toast";
 import { withCollections, type Column, type DbSchema, type NodeOf, type Query, type Scalar } from "@sibilla/shared";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter,

@@ -28,6 +28,9 @@ beforeEach(() => {
 });
 
 const sidebar = () => within(screen.getByRole("navigation"));
+/** An answer in the chat: Rare UI's StreamingResponse renders it word by word, so match the whole block's text. */
+const reply = (text: string) =>
+  screen.findByText((_, el) => el?.getAttribute("data-slot") === "streaming-response" && !!el.textContent?.includes(text));
 
 test("opening a saved interface shows its latest version", async () => {
   render(<App />);
@@ -44,7 +47,8 @@ test("deleting the open interface resets to an empty draft", async () => {
   mocked.deleteInterface.mockResolvedValue(undefined);
   mocked.listInterfaces.mockResolvedValue([]);
   await userEvent.click(screen.getByRole("button", { name: "Elimina" }));
-  await userEvent.click(within(await screen.findByRole("alertdialog")).getByRole("button", { name: "Elimina" }));
+  // Confirmed in place: the bin opens into ✓ / ✕.
+  await userEvent.click(await screen.findByRole("button", { name: "Conferma eliminazione" }));
 
   await waitFor(() => expect(mocked.deleteInterface).toHaveBeenCalledWith(1));
   expect(await screen.findByRole("heading", { name: /cosa costruiamo/ })).toBeInTheDocument();
@@ -95,7 +99,7 @@ test("a conversation without an interface yet is a full-page chat", async () => 
   mocked.createInterface.mockResolvedValue({ ...detail(0), id: 7, nome: "quanti ordini?", latestVersion: null });
   render(<App />);
   await userEvent.type(screen.getByLabelText("Messaggio"), "quanti ordini?{Enter}");
-  expect(await screen.findByText("Ci sono 300 ordini.")).toBeInTheDocument();
+  expect(await reply("Ci sono 300 ordini.")).toBeInTheDocument();
   expect(screen.queryByRole("heading", { name: /cosa costruiamo/ })).not.toBeInTheDocument();
   expect(mocked.addVersion).not.toHaveBeenCalled();
   expect(screen.getByLabelText("Messaggio")).toBeInTheDocument();
@@ -122,7 +126,7 @@ test("a text-only answer is shown in the chat and keeps the current screen", asy
   await userEvent.type(screen.getByLabelText("Messaggio"), "crea{Enter}");
   await screen.findAllByRole("heading", { name: "Prima" });
   await userEvent.type(screen.getByLabelText("Messaggio"), "quanti ordini?{Enter}");
-  expect(await screen.findByText("Ci sono 300 ordini.")).toBeInTheDocument();
+  expect(await reply("Ci sono 300 ordini.")).toBeInTheDocument();
   expect(screen.getAllByRole("heading", { name: "Prima" }).length).toBeGreaterThan(0);
 });
 
@@ -152,7 +156,7 @@ test("opening a saved interface restores its chat", async () => {
   ]);
   render(<App />);
   await userEvent.click(await sidebar().findByRole("button", { name: /Vendite/ }));
-  expect(await screen.findByText("Fatto, ecco le vendite.")).toBeInTheDocument();
+  expect(await reply("Fatto, ecco le vendite.")).toBeInTheDocument();
   expect(screen.getByText("bozza.png")).toBeInTheDocument();
 });
 
@@ -188,7 +192,7 @@ test("a link generates its screen the first time, then just opens it; back retur
     spec: { ...home, screens: [{ path: "/report", title: "Report", variables: [], nodes: report.nodes, message: "Ecco il report." }] },
     prompt: "Apri «Report»",
   }));
-  expect(screen.getByText("Ecco il report.")).toBeInTheDocument();
+  expect(await reply("Ecco il report.")).toBeInTheDocument();
 
   await userEvent.click(screen.getByRole("button", { name: /Indietro/ }));
   await screen.findByRole("heading", { name: "Elenco clienti" });

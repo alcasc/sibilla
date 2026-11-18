@@ -1,9 +1,8 @@
 import { useEffect, useState } from "react";
 import { ArrowLeftIcon } from "lucide-react";
-import { toast } from "sonner";
+import { Toaster, toast } from "@/components/ui/toast";
 import { HOME, screenSpec, type Route, type Spec } from "@sibilla/shared";
 import { Button } from "@/components/ui/button";
-import { Toaster } from "@/components/ui/sonner";
 import { Spinner } from "@/components/ui/spinner";
 import { api, setShareToken } from "./api";
 import type { Nav } from "./renderer/context";
@@ -40,7 +39,7 @@ export function SharedApp({ token }: { token: string }) {
           <Renderer key={JSON.stringify(screen)} spec={screen} onNavigate={go} />
         </div>
       </div>
-      <Toaster richColors />
+      <Toaster />
     </>
   );
 }

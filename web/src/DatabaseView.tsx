@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { DownloadIcon, PlusIcon, Trash2Icon, XIcon } from "lucide-react";
-import { toast } from "sonner";
-import type { Column, DbSchema, LlmOptions, ProviderStatus, Query, Scalar } from "@sibilla/shared";
+import { toast } from "@/components/ui/toast";
+import type { Column, DbSchema, Effort, LlmOptions, ProviderStatus, Query, Scalar } from "@sibilla/shared";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
   AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
@@ -52,7 +52,7 @@ export function DatabaseView({ schema, table, loading, llm, providers, onLlmChan
   onSelect: (table: string | null) => void;
   /** The database changed shape or content. */
   onSchema: (schema?: DbSchema) => void;
-  onAsk: (prompt: string, attachments: Attachment[]) => void;
+  onAsk: (prompt: string, attachments: Attachment[], effort: Effort) => void;
 }) {
   const t = table ? schema?.tables.find((x) => x.name === table) : undefined;
   return (

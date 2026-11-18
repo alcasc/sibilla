@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState, type FormEvent, type Re
 import { Button } from "@/components/ui/button";
 import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Spinner } from "@/components/ui/spinner";
 import { api, type Account, type Session } from "./api";
 import { Orb } from "./Orb";
@@ -51,12 +52,13 @@ function SignIn({ signup, onDone }: { signup: boolean; onDone: (user: Account) =
         <FieldGroup className="w-full">
           <Field>
             <FieldLabel htmlFor="email">Email</FieldLabel>
-            <Input id="email" type="email" autoComplete="email" autoFocus required value={email} onChange={(e) => setEmail(e.target.value)} />
+            <Input id="email" type="email" autoComplete="email" autoFocus required className="h-12 rounded-xl px-4 text-base md:text-base" value={email} onChange={(e) => setEmail(e.target.value)} />
           </Field>
           <Field>
             <FieldLabel htmlFor="password">Password</FieldLabel>
-            <Input id="password" type="password" autoComplete={creating ? "new-password" : "current-password"} required minLength={creating ? 8 : undefined}
-              value={password} onChange={(e) => setPassword(e.target.value)} />
+            {/* Rare UI: show/hide toggle; the strength meter only while creating an account. */}
+            <PasswordInput id="password" autoComplete={creating ? "new-password" : "current-password"} required minLength={creating ? 8 : undefined}
+              value={password} onChange={setPassword} strength={creating} className="max-w-none" />
             {creating && <FieldDescription>Almeno 8 caratteri.</FieldDescription>}
           </Field>
           {error && <p role="alert" className="text-sm text-destructive">{error}</p>}

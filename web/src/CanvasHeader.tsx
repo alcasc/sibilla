@@ -1,14 +1,11 @@
 import { useState, type FormEvent } from "react";
 import {
-  ArchiveIcon, ArchiveRestoreIcon, CheckIcon, CopyIcon, DatabaseIcon, PencilIcon, PinIcon, PinOffIcon, RotateCcwIcon, Share2Icon, Trash2Icon,
+  ArchiveIcon, ArchiveRestoreIcon, CheckIcon, CopyIcon, DatabaseIcon, PencilIcon, PinIcon, PinOffIcon, RotateCcwIcon, Share2Icon,
 } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "@/components/ui/toast";
 import type { InterfaceDetail } from "@sibilla/shared";
-import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
-  AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import { DeleteButton } from "@/components/ui/delete-button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
@@ -129,19 +126,15 @@ export function CanvasHeader({ title, detail, version, busy, hasData, onSelectVe
       )}
 
       {detail && (
-        <AlertDialog>
-          <AlertDialogTrigger render={<Button variant="outline" size="icon-sm" disabled={busy} aria-label="Elimina" title="Elimina" />}><Trash2Icon /></AlertDialogTrigger>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Eliminare «{detail.nome}»?</AlertDialogTitle>
-              <AlertDialogDescription>Verranno eliminati la conversazione, le sue {detail.versions.length} versioni e i dati inseriti nelle collezioni di questa app. L'operazione non è reversibile.</AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Annulla</AlertDialogCancel>
-              <AlertDialogAction variant="destructive" onClick={onDelete}>Elimina</AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
+        // Confirmed in place (Rare UI): the bin opens into ✓ / ✕. What gets deleted stays in the tooltip and the description.
+        <>
+          <DeleteButton compact onConfirm={onDelete} aria-describedby="elimina-descrizione"
+            title={`Elimina «${detail.nome}»: conversazione, ${detail.versions.length} versioni e dati dell'app. Non è reversibile.`}
+            className={busy ? "pointer-events-none opacity-50" : undefined} aria-disabled={busy || undefined} />
+          <span id="elimina-descrizione" className="sr-only">
+            Verranno eliminati la conversazione, le sue {detail.versions.length} versioni e i dati inseriti nelle collezioni di questa app. L'operazione non è reversibile.
+          </span>
+        </>
       )}
 
       {naming && (

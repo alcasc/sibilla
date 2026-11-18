@@ -86,3 +86,5 @@ Sibilla è un progetto giovane, nato come prova di concetto. Funziona, ma leggi 
 ## Licenza
 
 [MIT](LICENSE). I marchi di Claude, OpenAI e Gemini mostrati nel selettore dei modelli appartengono ai rispettivi proprietari; i tracciati vengono da [Simple Icons](https://simpleicons.org).
+
+Alcuni componenti dell'interfaccia vengono da [Rare UI](https://rareui.com) di Swami Malode (il riquadro dei messaggi, lo stato di lavoro, le risposte, le notifiche e altri) e la sfera da [orbkit](https://orbkit.vercel.app): restano sotto la loro licenza, vedi [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

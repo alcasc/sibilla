@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { DownloadIcon, Trash2Icon, UploadIcon } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "@/components/ui/toast";
 import type { AppScope, Query, Scalar } from "@sibilla/shared";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter,

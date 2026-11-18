@@ -1,11 +1,14 @@
 import { useState } from "react";
 import { ChevronRightIcon, LogOutIcon, PanelLeftCloseIcon, PlusIcon, SearchIcon } from "lucide-react";
 import type { ConversationKind, InterfaceSummary } from "@sibilla/shared";
+import { AnimatedCounter } from "@/components/ui/animated-counter";
+import { BounceSidebar, type BounceSidebarItem } from "@/components/ui/bounce-sidebar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { ThemeSelector, type ThemeOption } from "@/components/ui/theme-selector";
 import { useAccount } from "./Access";
 import { Orb } from "./Orb";
-import { ThemeToggle } from "./ThemeToggle";
+import { useTheme, type Theme } from "./theme";
 
 // Conversations grouped by what they produced, the most substantial first.
 const KINDS: { kind: ConversationKind; label: string }[] = [
@@ -13,7 +16,16 @@ const KINDS: { kind: ConversationKind; label: string }[] = [
 ];
 /** Above this many conversations a search box is worth its space. */
 const SEARCH_FROM = 6;
-const number = new Intl.NumberFormat("it-IT");
+
+/** The dot that bounces to the open conversation: Sibilla's amber, a shade deeper so it reads on the light sidebar. */
+const DOT = "#e7a600";
+
+/** Miniatures of the app for the theme choice, in Sibilla's neutrals. "Dispositivo" shows both: light rail, dark page. */
+const THEMES: ThemeOption[] = [
+  { value: "light", label: "Chiaro", colors: { sidebar: "#f7f7f7", panel: "#ffffff", border: "rgba(0, 0, 0, 0.06)", strong: "#d4d4d4", muted: "#ebebeb", tile: "#f2f2f2" } },
+  { value: "dark", label: "Scuro", colors: { sidebar: "#171717", panel: "#0a0a0a", border: "transparent", strong: "#404040", muted: "#262626", tile: "#1f1f1f" } },
+  { value: "system", label: "Dispositivo", colors: { sidebar: "#f7f7f7", panel: "#0a0a0a", border: "rgba(0, 0, 0, 0.06)", strong: "#a3a3a3", muted: "#d4d4d4", tile: "#262626" } },
+];
 
 const DAY = 86_400_000;
 /** When a conversation was last touched, in a word: "oggi", "ieri", "3 g", "12 nov". */
@@ -51,6 +63,7 @@ export function InterfacesSidebar({ list, currentId, onOpen, onNew, onClose, tab
   onNewTable?: () => void;
 }) {
   const { user, logout } = useAccount();
+  const { theme, setTheme } = useTheme();
   const [search, setSearch] = useState("");
   const [showArchived, setShowArchived] = useState(false);
   const term = search.trim().toLowerCase();
@@ -58,21 +71,26 @@ export function InterfacesSidebar({ list, currentId, onOpen, onNew, onClose, tab
   const active = found.filter((i) => !i.archived);
   const archived = found.filter((i) => i.archived);
 
-  const group = (id: string, label: string, items: InterfaceSummary[]) => items.length > 0 && (
-    <section key={id} aria-labelledby={`gruppo-${id}`}>
-      <h2 id={`gruppo-${id}`} className={LABEL}>{label}</h2>
-      <ul>
-        {items.map((i) => (
-          <li key={i.id}>
-            <button type="button" onClick={() => onOpen(i.id)} aria-current={!dbOpen && i.id === currentId ? "page" : undefined} className={ROW}>
-              <span className="min-w-0 flex-1 truncate">{i.nome}</span>
-              <span className="shrink-0 text-xs font-normal text-muted-foreground tabular-nums">{when(i.updatedAt)}</span>
-            </button>
-          </li>
-        ))}
-      </ul>
-    </section>
-  );
+  /**
+   * Groups of conversations as one Rare UI bounce list: a heading per group, then its rows. The dot arcs to the open
+   * conversation; `ids[n]` is the conversation at item n (null for a heading).
+   */
+  const conversationList = (label: string, groups: [string, InterfaceSummary[]][]) => {
+    const items: BounceSidebarItem[] = [];
+    const ids: (number | null)[] = [];
+    for (const [heading, rows] of groups) {
+      if (!rows.length) continue;
+      items.push({ label: heading, heading: true });
+      ids.push(null);
+      for (const i of rows) { items.push({ label: i.nome, trailing: when(i.updatedAt) }); ids.push(i.id); }
+    }
+    if (!items.length) return null;
+    return (
+      <BounceSidebar aria-label={label} items={items} dotColor={DOT} className="gap-0 pt-4"
+        value={dbOpen || currentId === null ? -1 : ids.indexOf(currentId)}
+        onChange={(n) => { const id = ids[n]; if (id !== null && id !== undefined) onOpen(id); }} />
+    );
+  };
 
   return (
     <nav aria-label="Interfacce salvate" className="flex h-full min-h-0 w-64 flex-col border-r bg-muted/30">
@@ -96,8 +114,10 @@ export function InterfacesSidebar({ list, currentId, onOpen, onNew, onClose, tab
       <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-3">
         {list.length === 0 && <p className="px-2 pt-4 text-sm text-muted-foreground">Qui trovi le tue conversazioni: si salvano da sole.</p>}
         {list.length > 0 && found.length === 0 && <p className="px-2 pt-4 text-sm text-muted-foreground">Nessuna conversazione con «{search.trim()}».</p>}
-        {group("fissate", "Fissate", active.filter((i) => i.pinned))}
-        {KINDS.map(({ kind, label }) => group(kind, label, active.filter((i) => !i.pinned && (i.kind ?? "view") === kind)))}
+        {conversationList("Conversazioni", [
+          ["Fissate", active.filter((i) => i.pinned)],
+          ...KINDS.map(({ kind, label }): [string, InterfaceSummary[]] => [label, active.filter((i) => !i.pinned && (i.kind ?? "view") === kind)]),
+        ])}
         {archived.length > 0 && (
           <div className="mt-3">
             {/* Searching looks in the archive too, so it opens by itself when there is a match. */}
@@ -105,7 +125,7 @@ export function InterfacesSidebar({ list, currentId, onOpen, onNew, onClose, tab
               <ChevronRightIcon aria-hidden className={`size-3.5 transition-transform ${showArchived || term ? "rotate-90" : ""}`} />
               Archiviate
             </button>
-            {(showArchived || !!term) && group("archiviate", "Archivio", archived)}
+            {(showArchived || !!term) && conversationList("Conversazioni archiviate", [["Archivio", archived]])}
           </div>
         )}
       </div>
@@ -122,7 +142,9 @@ export function InterfacesSidebar({ list, currentId, onOpen, onNew, onClose, tab
               <li key={t}>
                 <button type="button" onClick={() => onOpenTable(t)} aria-current={dbOpen && table === t ? "page" : undefined} className={ROW}>
                   <span className="min-w-0 flex-1 truncate">{t}</span>
-                  <span className="shrink-0 text-xs font-normal text-muted-foreground tabular-nums">{t in counts ? number.format(counts[t]) : "–"}</span>
+                  <span className="shrink-0 text-xs font-normal text-muted-foreground tabular-nums">
+                    {t in counts ? <AnimatedCounter value={counts[t]} separator="." aria-label={`${counts[t]} record`} /> : "–"}
+                  </span>
                 </button>
               </li>
             ))}
@@ -137,7 +159,10 @@ export function InterfacesSidebar({ list, currentId, onOpen, onNew, onClose, tab
             <Button variant="ghost" size="icon-xs" aria-label="Esci" title="Esci" onClick={logout}><LogOutIcon /></Button>
           </div>
         )}
-        <div className="flex items-center justify-between">Tema <ThemeToggle /></div>
+        <div className="flex flex-col gap-2">
+          Tema
+          <ThemeSelector themes={THEMES} value={theme} onChange={(v) => setTheme(v as Theme)} className="gap-2.5" itemClassName="w-[4.25rem]" />
+        </div>
       </div>
     </nav>
   );
