@@ -1,19 +1,21 @@
-import type { DbSchema, LlmOptions, ProviderStatus } from "@sibilla/shared";
+import type { DbSchema, Effort, LlmOptions, ProviderStatus } from "@sibilla/shared";
+import { AnimatedCounter } from "@/components/ui/animated-counter";
 import type { Attachment } from "./attachments";
 import { Composer } from "./Composer";
+import { ModePicker } from "./ModePicker";
 import { Orb } from "./Orb";
 import { suggestions } from "./suggestions";
 import { useCounts } from "./useCounts";
 
-const MODES = [
-  { id: "classic", label: "Tutta insieme", hint: "Costruisco l'app completa in una volta." },
-  { id: "procedural", label: "Passo per passo", hint: "Parto dalla prima schermata; le altre le genero quando ci entri, e restano." },
-] as const;
-/** Tables listed before the rest is summed up in one line. Four, like the starters beside them, so the two panels end level. */
+/** What to describe depends on how it gets built: the whole app, or where it starts. */
+const PLACEHOLDER = {
+  classic: "Descrivi l'app completa che ti serve…",
+  procedural: "Descrivi la prima schermata…",
+} as const;
+/** Tables named in the data line before the rest is summed up as "e altre N". */
 const TABLES_SHOWN = 4;
 
 const greeting = (hour = new Date().getHours()) => (hour < 5 || hour >= 18 ? "Buonasera" : hour < 13 ? "Buongiorno" : "Buon pomeriggio");
-const number = new Intl.NumberFormat("it-IT");
 
 /**
  * Start of a new conversation. One question ("what do you need?") answered by the composer, which comes first;
@@ -28,12 +30,11 @@ export function Home({ mode, onMode, schema, loading, llm, providers, onLlmChang
   providers: ProviderStatus[];
   onLlmChange: (patch: Partial<LlmOptions>) => void;
   onProvidersChange: (p: ProviderStatus[]) => void;
-  onSend: (prompt: string, attachments?: Attachment[]) => void;
+  onSend: (prompt: string, attachments?: Attachment[], effort?: Effort) => void;
 }) {
   const tables = schema?.tables.map((t) => t.name) ?? [];
   const shown = tables.slice(0, TABLES_SHOWN);
   const counts = useCounts(shown);
-  const row = "flex w-full items-baseline gap-3 px-4 py-2.5 text-left text-sm hover:bg-muted focus-visible:bg-muted focus-visible:outline-none disabled:opacity-50";
 
   return (
     <div className="flex min-h-full flex-col justify-center px-4 py-10 sm:px-8">
@@ -46,65 +47,47 @@ export function Home({ mode, onMode, schema, loading, llm, providers, onLlmChang
           </div>
         </header>
 
-        <div className="flex flex-col gap-2.5">
-          <Composer size="hero" autoFocus loading={loading} llm={llm} providers={providers}
+        <div className="flex flex-col gap-3">
+          <Composer size="hero" autoFocus loading={loading} llm={llm} providers={providers} placeholder={PLACEHOLDER[mode]}
             onLlmChange={onLlmChange} onProvidersChange={onProvidersChange} onSend={onSend} />
-          {/* How to build belongs with the request it applies to, so it sits against the composer. */}
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-1 text-sm text-muted-foreground">
-            <div role="radiogroup" aria-label="Come costruire" className="inline-flex gap-0.5 rounded-full border p-0.5">
-              {MODES.map((m) => (
-                <button key={m.id} type="button" role="radio" aria-checked={mode === m.id} onClick={() => onMode(m.id)}
-                  className="rounded-full px-3 py-1 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none aria-checked:bg-muted aria-checked:font-medium aria-checked:text-foreground">
-                  {m.label}
+          {/* Ways to start, as chips under the box: shortcuts for what you would otherwise type. */}
+          <ul aria-label="Da dove partire" className="flex flex-wrap gap-2">
+            {suggestions(schema).map((s) => (
+              <li key={s.prompt} className="min-w-0 max-w-full">
+                <button type="button" disabled={loading} onClick={() => onSend(s.prompt)} title={s.prompt}
+                  className="flex max-w-full items-center gap-1.5 rounded-full border bg-background px-3 py-1.5 text-sm transition-colors hover:border-foreground/25 hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:opacity-50">
+                  <span className="shrink-0 font-medium">{s.title}</span>
+                  <span className="min-w-0 truncate text-muted-foreground">{s.summary}</span>
                 </button>
-              ))}
-            </div>
-            <span className="min-w-0 basis-full sm:flex-1 sm:basis-0">{MODES.find((m) => m.id === mode)!.hint}</span>
-          </div>
+              </li>
+            ))}
+          </ul>
         </div>
 
-        {/* Two panels of four rows each: they start and end on the same lines. */}
-        <div className="grid gap-4 md:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
-          <section aria-labelledby="home-starters" className="overflow-hidden rounded-xl border">
-            <h2 id="home-starters" className="px-4 pt-3 pb-1.5 text-sm font-medium">Da dove partire</h2>
-            <ul className="divide-y">
-              {suggestions(schema).map((s) => (
-                <li key={s.prompt}>
-                  <button type="button" disabled={loading} onClick={() => onSend(s.prompt)} className={row}>
-                    <span className="w-20 shrink-0 font-medium">{s.title}</span>
-                    <span className="min-w-0 flex-1 truncate text-muted-foreground" title={s.prompt}>{s.summary}</span>
+        {/* How to build belongs with the request it applies to, so it follows the composer and its shortcuts. */}
+        <ModePicker mode={mode} onMode={onMode} />
+
+        {/* The data is one quiet line: it is in the sidebar too, here it only says what Sibilla builds on. */}
+        <p className="flex flex-wrap items-baseline gap-x-1.5 gap-y-1 px-1 text-xs text-muted-foreground">
+          {tables.length === 0 ? "Nessun dato collegato: l'archivio che serve alla tua app lo creo io." : (
+            <>
+              <span>Sui tuoi dati:</span>
+              {shown.map((t, i) => (
+                <span key={t} className="inline-flex items-baseline gap-1.5">
+                  {i > 0 && <span aria-hidden>·</span>}
+                  <button type="button" disabled={loading} title={`Una vista su ${t}`}
+                    onClick={() => onSend(`Una vista su ${t}: i numeri principali e l'elenco con ricerca e filtri`)}
+                    className="rounded-sm underline-offset-4 hover:text-foreground hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:opacity-50">
+                    {t}
                   </button>
-                </li>
+                  {/* A count that could not be read is left out, never shown as zero. */}
+                  {t in counts && <AnimatedCounter value={counts[t]} separator="." aria-label={`${counts[t]} record`} className="tabular-nums opacity-70" />}
+                </span>
               ))}
-            </ul>
-          </section>
-
-          <section aria-labelledby="home-data" className="flex flex-col overflow-hidden rounded-xl border">
-            <h2 id="home-data" className="flex items-baseline gap-2 px-4 pt-3 pb-1.5 text-sm font-medium">
-              I tuoi dati
-              {tables.length > 0 && <span className="ml-auto text-xs font-normal text-muted-foreground">record</span>}
-            </h2>
-            {tables.length === 0 ? (
-              <p className="px-4 pb-3 text-sm text-muted-foreground">Nessun dato collegato. L'archivio che serve alla tua app lo creo io.</p>
-            ) : (
-              <ul className="divide-y">
-                {shown.map((t) => (
-                  <li key={t}>
-                    <button type="button" disabled={loading} className={row}
-                      onClick={() => onSend(`Una vista su ${t}: i numeri principali e l'elenco con ricerca e filtri`)}>
-                      <span className="min-w-0 flex-1 truncate font-medium">{t}</span>
-                      {/* A count that could not be read is a dash, never a zero. */}
-                      <span className="shrink-0 tabular-nums text-muted-foreground">{t in counts ? number.format(counts[t]) : "–"}</span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-            {tables.length > shown.length && (
-              <p className="border-t px-4 py-2 text-xs text-muted-foreground">E altre {tables.length - shown.length}: {tables.slice(TABLES_SHOWN).join(", ")}</p>
-            )}
-          </section>
-        </div>
+              {tables.length > shown.length && <span>· e altre {tables.length - shown.length}</span>}
+            </>
+          )}
+        </p>
       </div>
     </div>
   );
